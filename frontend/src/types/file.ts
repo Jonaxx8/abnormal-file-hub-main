@@ -16,3 +16,13 @@ export interface StorageStatistics {
   saved_size: number;
   last_updated: string;
 }
+
+export interface FileFilters {
+  search?: string;
+  file_type?: string;
+  min_size?: number;
+  max_size?: number;
+  date_filter?: 'today' | 'week' | 'month' | 'custom';
+  start_date?: string;
+  end_date?: string;
+}

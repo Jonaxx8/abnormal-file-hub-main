@@ -1,7 +1,10 @@
 from django.shortcuts import render
+from django.db.models import Q
+from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from datetime import datetime, timedelta
 from .models import File, StorageStatistics
 from .serializers import FileSerializer, StorageStatisticsSerializer
 
@@ -10,6 +13,49 @@ from .serializers import FileSerializer, StorageStatisticsSerializer
 class FileViewSet(viewsets.ModelViewSet):
     queryset = File.objects.all()
     serializer_class = FileSerializer
+
+    def get_queryset(self):
+        queryset = File.objects.all()
+        
+        # Search by filename
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(original_filename__icontains=search)
+        
+        # Filter by file type
+        file_type = self.request.query_params.get('file_type', None)
+        if file_type:
+            queryset = queryset.filter(file_type__icontains=file_type)
+        
+        # Filter by size range (in bytes)
+        min_size = self.request.query_params.get('min_size', None)
+        max_size = self.request.query_params.get('max_size', None)
+        if min_size:
+            queryset = queryset.filter(size__gte=int(min_size))
+        if max_size:
+            queryset = queryset.filter(size__lte=int(max_size))
+        
+        # Filter by upload date
+        date_filter = self.request.query_params.get('date_filter', None)
+        if date_filter:
+            today = datetime.now()
+            if date_filter == 'today':
+                queryset = queryset.filter(uploaded_at__date=today.date())
+            elif date_filter == 'week':
+                week_ago = today - timedelta(days=7)
+                queryset = queryset.filter(uploaded_at__gte=week_ago)
+            elif date_filter == 'month':
+                month_ago = today - timedelta(days=30)
+                queryset = queryset.filter(uploaded_at__gte=month_ago)
+            elif date_filter == 'custom':
+                start_date = self.request.query_params.get('start_date')
+                end_date = self.request.query_params.get('end_date')
+                if start_date:
+                    queryset = queryset.filter(uploaded_at__gte=parse_datetime(start_date))
+                if end_date:
+                    queryset = queryset.filter(uploaded_at__lte=parse_datetime(end_date))
+        
+        return queryset.select_related('original_file')
 
     def create(self, request, *args, **kwargs):
         file_obj = request.FILES.get('file')

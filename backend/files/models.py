@@ -39,6 +39,26 @@ class File(models.Model):
             sha256.update(chunk)
         return sha256.hexdigest()
 
+    def delete(self, *args, **kwargs):
+        """Override delete to handle duplicates"""
+        # If this is an original file (has duplicates)
+        duplicates = self.duplicates.all()
+        if duplicates.exists():
+            # Get the first duplicate to become the new original
+            new_original = duplicates.first()
+            # Update all other duplicates to point to the new original
+            self.duplicates.exclude(id=new_original.id).update(original_file=new_original)
+            # Make the new original a non-duplicate
+            new_original.is_duplicate = False
+            new_original.original_file = None
+            new_original.save()
+        
+        # Proceed with normal deletion
+        super().delete(*args, **kwargs)
+        
+        # Update storage statistics
+        StorageStatistics.update_statistics()
+
 class StorageStatistics(models.Model):
     total_files = models.IntegerField(default=0)
     duplicate_files = models.IntegerField(default=0)
